@@ -1,0 +1,204 @@
+/* Global styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #f8f9fa;
+}
+
+.diary-app {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* Header */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e1e4e8;
+}
+
+h1 {
+  color: #2c3e50;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  font: inherit;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.add-button {
+  background-color: #4a6fa5;
+  color: white;
+  font-weight: 500;
+  padding: 0.5rem 1.25rem;
+}
+
+.add-button:hover {
+  background-color: #3a5a8f;
+}
+
+.save-button {
+  background-color: #2ecc71;
+  color: white;
+  font-weight: 500;
+  margin-right: 0.5rem;
+}
+
+.save-button:hover {
+  background-color: #27ae60;
+}
+
+.cancel-button {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.cancel-button:hover {
+  background-color: #7f8c8d;
+}
+
+.delete-button {
+  background: none;
+  color: #e74c3c;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  opacity: 0.7;
+}
+
+.delete-button:hover {
+  opacity: 1;
+  background-color: #f8d7da;
+}
+
+/* Entry form */
+.entry-form {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 1rem;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px 8px 0 0;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.6;
+}
+
+.form-actions {
+  padding: 0.75rem 1rem;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e1e4e8;
+  text-align: right;
+}
+
+/* Entries list */
+.entries-list {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.entry {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.entry:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e1e4e8;
+}
+
+.entry-date {
+  color: #7f8c8d;
+  font-size: 0.85rem;
+}
+
+.entry-content {
+  padding: 1.25rem;
+  white-space: pre-wrap;
+}
+
+.entry-content p {
+  margin-bottom: 0.75rem;
+}
+
+.entry-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Loading and error states */
+.loading,
+.no-entries {
+  text-align: center;
+  color: #7f8c8d;
+  padding: 2rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #f5c6cb;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .diary-app {
+    padding: 1rem 0.75rem;
+  }
+  
+  h1 {
+    font-size: 1.5rem;
+  }
+  
+  .entry-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .delete-button {
+    align-self: flex-end;
+  }
+}

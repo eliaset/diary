@@ -1,0 +1,128 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to cPanel
+    runs-on: ubuntu-latest
+    
+    env:
+      CPANEL_HOST: dev.eliasshamil.com
+      CPANEL_USER: eliassqr
+      NODE_VERSION: 18
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # Install dependencies
+      - name: Install root dependencies
+        run: npm ci --production=false
+
+      - name: Install client dependencies
+        run: npm ci --prefix client
+
+      # Build React app
+      - name: Build client
+        run: npm run client:build
+
+      # Create deployment package
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy
+          cp -r server.js package.json package-lock.json migrations deploy/
+          cp -r client/build deploy/client
+          
+          # Create .env file with secrets
+          echo "NODE_ENV=production" > deploy/.env
+          echo "PORT=3000" >> deploy/.env
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> deploy/.env
+          echo "DB_USER=${{ secrets.DB_USER }}" >> deploy/.env
+          echo "DB_PASS=${{ secrets.DB_PASS }}" >> deploy/.env
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> deploy/.env
+          
+          # Create deploy.sh script
+          cat > deploy/deploy.sh << 'EOL'
+          #!/bin/bash
+          set -e
+          
+          APP_DIR="/home/eliassqr/apps/dev"
+          TMP_DIR="$APP_DIR/tmp"
+          
+          echo "[1/5] Stopping application..."
+          if command -v pm2 >/dev/null 2>&1 && pm2 describe diary-app >/dev/null 2>&1; then
+            pm2 stop diary-app || true
+          fi
+          
+          echo "[2/5] Creating backup..."
+          BACKUP_DIR="$TMP_DIR/backup-$(date +%Y%m%d%H%M%S)"
+          mkdir -p "$BACKUP_DIR"
+          [ -d "$APP_DIR" ] && cp -r "$APP_DIR"/* "$BACKUP_DIR"/ || true
+          
+          echo "[3/5] Extracting new version..."
+          mkdir -p "$APP_DIR"
+          tar -xzf "$TMP_DIR/build.tar.gz" -C "$APP_DIR"
+          
+          echo "[4/5] Installing production dependencies..."
+          cd "$APP_DIR"
+          npm ci --production
+          
+          echo "[5/5] Starting application..."
+          if command -v pm2 >/dev/null 2>&1; then
+            if pm2 describe diary-app >/dev/null 2>&1; then
+              pm2 restart diary-app --update-env
+            else
+              pm2 start server.js --name diary-app -i 0
+            fi
+            pm2 save
+          else
+            # Fallback to cPanel Passenger
+            touch "$APP_DIR/tmp/restart.txt"
+          fi
+          
+          echo "Deployment completed successfully!"
+          EOL
+          
+          # Create tarball
+          cd deploy
+          tar -czf "../build.tar.gz" .
+          cd ..
+
+      # Upload and deploy
+      - name: Upload to cPanel
+        uses: appleboy/scp-action@v1.0.1
+        with:
+          host: ${{ env.CPANEL_HOST }}
+          username: ${{ env.CPANEL_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          source: "build.tar.gz"
+          target: "/home/${{ env.CPANEL_USER }}/apps/dev/tmp/"
+          strip_components: 1
+          overwrite: true
+
+      - name: Run deployment script
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ env.CPANEL_HOST }}
+          username: ${{ env.CPANEL_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          script: |
+            cd "/home/${{ env.CPANEL_USER }}/apps/dev"
+            chmod +x tmp/deploy.sh
+            ./tmp/deploy.sh
+            
+            # Clean up
+            rm -f tmp/build.tar.gz
+            rm -f tmp/deploy.sh
+            
+            echo "Deployment completed successfully!"
