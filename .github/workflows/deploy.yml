@@ -84,25 +84,40 @@ jobs:
       - name: Create deployment package
         run: |
           echo "Creating deployment package..."
+          echo "Current directory: $(pwd)"
           
           # Verify client build exists
+          echo "Verifying client build..."
+          ls -la client/
+          
           if [ ! -d "client/dist" ]; then
             echo "❌ Client build not found at client/dist/"
-            echo "Current directory: $(pwd)"
-            echo "Contents of client directory:"
-            ls -la client/
-            exit 1
+            echo "Trying to build client..."
+            cd client
+            npm run build
+            cd ..
+            
+            if [ ! -d "client/dist" ]; then
+              echo "❌ Failed to build client"
+              exit 1
+            fi
           fi
+          
+          echo "✅ Client build verified"
+          echo "Client build contents:"
+          ls -la client/dist/
           
           # Create deploy directory structure
           mkdir -p deploy/client
           
           # Copy server files
-          cp -r server.js package.json package-lock.json migrations deploy/ 2>/dev/null || echo "Some server files not found, continuing..."
+          echo "Copying server files..."
+          cp -v server.js package.json package-lock.json migrations/ deploy/ 2>/dev/null || echo "Some server files not found, continuing..."
           
           # Copy built client files
-          echo "Copying client files from $(pwd)/client/dist/ to deploy/client/"
-          cp -r client/dist/* deploy/client/ 2>/dev/null || (echo "Failed to copy client files" && exit 1)
+          echo "Copying client files..."
+          mkdir -p deploy/client
+          cp -rv client/dist/. deploy/client/ || (echo "Failed to copy client files" && exit 1)
           
           # Create .env file with secrets
           echo "NODE_ENV=production" > deploy/.env
