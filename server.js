@@ -47,6 +47,17 @@ if (isProduction) {
 if (isProduction) {
   const morgan = require('morgan');
   app.use(morgan('combined'));
+  
+  // Serve static files from the client's dist directory
+  app.use(express.static(path.join(__dirname, 'client/dist'), {
+    etag: true,
+    maxAge: '1y', // Cache static assets for 1 year
+  }));
+} else {
+  // In development, just serve the client from Vite dev server (handled by CORS)
+  app.get('/', (req, res) => {
+    res.redirect('http://localhost:5173');
+  });
 }
 
 // JSON middleware
@@ -126,15 +137,19 @@ app.delete('/api/entries/:id', async (req, res) => {
 
 // Serve React build
 const clientBuildPath = path.join(__dirname, 'client', 'build');
-app.use(express.static(clientBuildPath));
 
 // For all non-API routes, serve index.html
-app.get('*', (req, res) => {
-  // Avoid intercepting API routes
-  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(clientBuildPath, 'index.html'));
-});
+if (isProduction) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'client/dist/index.html'));
+  });
+}
 
+// Start the server
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  if (isProduction) {
+    console.log('Serving static files from:', path.join(__dirname, 'client/dist'));
+  }
 });

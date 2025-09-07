@@ -29,19 +29,18 @@ jobs:
       - name: Install root dependencies
         run: npm ci --production=false
 
-      - name: Install client dependencies
-        run: npm ci --prefix client
-
-      # Build React app
-      - name: Build client
-        run: npm run client:build
+      - name: Install and build client
+        run: |
+          npm ci
+          cd client && npm ci && npm run build
+          cd ..
 
       # Create deployment package
       - name: Create deployment package
         run: |
           mkdir -p deploy
           cp -r server.js package.json package-lock.json migrations deploy/
-          cp -r client/build deploy/client
+          cp -r client/dist deploy/client
           
           # Create .env file with secrets
           echo "NODE_ENV=production" > deploy/.env
@@ -97,6 +96,11 @@ jobs:
           cd deploy
           # Ensure tmp directory exists
           mkdir -p tmp
+          # Copy all files except node_modules, .git, and client/src
+          cp -r ../../!(node_modules|.git|deploy|client/node_modules) tmp/
+          # Copy built client files
+          mkdir -p tmp/client
+          cp -r ../../client/dist/* tmp/client/
           # Create deploy.sh in the deployment package
           cat > deploy.sh << 'EOL'
           #!/bin/bash
