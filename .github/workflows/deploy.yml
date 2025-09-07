@@ -189,8 +189,23 @@ jobs:
           fi
           
           # Copy built client files
+          echo "Copying client files to deployment package..."
           mkdir -p tmp/client
-          cp -r client/dist/* tmp/client/
+          
+          # Verify the source directory exists
+          if [ -d "client/dist" ]; then
+            echo "Copying files from client/dist/ to tmp/client/"
+            cp -r client/dist/. tmp/client/ || (echo "Failed to copy client files" && exit 1)
+            echo "Client files copied successfully"
+            ls -la tmp/client/
+          else
+            echo "❌ Error: client/dist directory not found"
+            echo "Current directory: $(pwd)"
+            echo "Contents of client/:"
+            ls -la client/
+            exit 1
+          fi
+          
           # Create deploy.sh in the deployment package
           cat > deploy.sh << 'EOL'
           #!/bin/bash
