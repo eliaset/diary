@@ -100,7 +100,7 @@ jobs:
 
       # Upload and deploy
       - name: Upload to cPanel
-        uses: appleboy/scp-action@v1.0.1
+        uses: appleboy/scp-action@v1.1.1
         with:
           host: ${{ env.CPANEL_HOST }}
           username: ${{ env.CPANEL_USER }}
@@ -111,18 +111,31 @@ jobs:
           overwrite: true
 
       - name: Run deployment script
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.CPANEL_HOST }}
           username: ${{ env.CPANEL_USER }}
           key: ${{ secrets.CPANEL_SSH_KEY }}
           script: |
+            set -e  # Exit on error
             cd "/home/${{ env.CPANEL_USER }}/apps/dev"
+            
+            # Ensure deploy.sh is executable
+            if [ ! -f "tmp/deploy.sh" ]; then
+              echo "Error: deploy.sh not found!"
+              exit 1
+            fi
+            
             chmod +x tmp/deploy.sh
-            ./tmp/deploy.sh
+            
+            # Run deployment script
+            if ! ./tmp/deploy.sh; then
+              echo "Deployment script failed!"
+              exit 1
+            fi
             
             # Clean up
             rm -f tmp/build.tar.gz
             rm -f tmp/deploy.sh
             
-            echo "Deployment completed successfully!"
+            echo "✅ Deployment completed successfully!"
