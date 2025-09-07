@@ -48,11 +48,20 @@ if (isProduction) {
   const morgan = require('morgan');
   app.use(morgan('combined'));
   
-  // Serve static files from the client's dist directory
-  app.use(express.static(path.join(__dirname, 'client/dist'), {
+  // Serve static files from the client directory
+  const staticPath = path.join(__dirname, 'client');
+  console.log(`Serving static files from: ${staticPath}`);
+  
+  app.use(express.static(staticPath, {
     etag: true,
     maxAge: '1y', // Cache static assets for 1 year
+    index: 'index.html' // Serve index.html for root route
   }));
+  
+  // Handle SPA routing - return index.html for all other routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(staticPath, 'index.html'));
+  });
 } else {
   // In development, just serve the client from Vite dev server (handled by CORS)
   app.get('/', (req, res) => {
