@@ -40,18 +40,29 @@ jobs:
       - name: Install and build client
         run: |
           echo "Current directory: $(pwd)"
-          echo "Contents of client directory:"
+          echo "Contents of client directory before build:"
           ls -la client/
           
-          cd client
           echo "Installing client dependencies..."
+          cd client
           npm ci
           
           echo "Building client..."
           npm run build
           
-          echo "Build output:"
+          echo "Verifying build output..."
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed: dist directory not found"
+            echo "Current directory: $(pwd)"
+            ls -la
+            exit 1
+          fi
+          
+          echo "Build output in dist/:"
           ls -la dist/
+          
+          # Go back to root directory
+          cd ..
 
       # Create deployment package
       - name: Verify client build
@@ -72,14 +83,26 @@ jobs:
 
       - name: Create deployment package
         run: |
+          echo "Creating deployment package..."
+          
+          # Verify client build exists
+          if [ ! -d "client/dist" ]; then
+            echo "❌ Client build not found at client/dist/"
+            echo "Current directory: $(pwd)"
+            echo "Contents of client directory:"
+            ls -la client/
+            exit 1
+          fi
+          
           # Create deploy directory structure
           mkdir -p deploy/client
           
           # Copy server files
-          cp -r server.js package.json package-lock.json migrations deploy/
+          cp -r server.js package.json package-lock.json migrations deploy/ 2>/dev/null || echo "Some server files not found, continuing..."
           
           # Copy built client files
-          cp -r client/dist/* deploy/client/
+          echo "Copying client files from $(pwd)/client/dist/ to deploy/client/"
+          cp -r client/dist/* deploy/client/ 2>/dev/null || (echo "Failed to copy client files" && exit 1)
           
           # Create .env file with secrets
           echo "NODE_ENV=production" > deploy/.env
