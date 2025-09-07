@@ -135,17 +135,17 @@ jobs:
           cd deploy
           # Ensure tmp directory exists
           mkdir -p tmp
-          # Copy files individually to avoid glob pattern issues
-          cp ../../package.json ../../package-lock.json ../../server.js tmp/
+          # Copy files from the current directory
+          cp package.json package-lock.json server.js tmp/
           
           # Copy migrations if they exist
-          if [ -d "../../migrations" ]; then
-            cp -r ../../migrations tmp/
+          if [ -d "migrations" ]; then
+            cp -r migrations tmp/
           fi
           
           # Copy built client files
           mkdir -p tmp/client
-          cp -r ../../client/dist/* tmp/client/
+          cp -r client/dist/* tmp/client/
           # Create deploy.sh in the deployment package
           cat > deploy.sh << 'EOL'
           #!/bin/bash
