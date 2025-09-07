@@ -34,19 +34,38 @@ jobs:
 
       - name: Install and build client
         run: |
+          echo "Current directory: $(pwd)"
+          echo "Contents of client directory:"
+          ls -la client/
+          
           cd client
+          echo "Installing client dependencies..."
           npm ci
+          
+          echo "Building client..."
           npm run build
+          
+          echo "Build output:"
+          ls -la dist/
+          
           cd ..
 
       # Create deployment package
       - name: Verify client build
         run: |
+          echo "Verifying client build..."
           if [ ! -d "client/dist" ]; then
             echo "❌ Client build failed: client/dist directory not found"
+            echo "Current directory: $(pwd)"
+            echo "Contents of client directory:"
+            ls -la client/
+            echo "Contents of client/dist (if exists):"
+            ls -la client/dist/ 2>/dev/null || echo "client/dist does not exist"
             exit 1
           fi
           echo "✅ Client build verified"
+          echo "Client build contents:"
+          ls -la client/dist/
 
       - name: Create deployment package
         run: |
