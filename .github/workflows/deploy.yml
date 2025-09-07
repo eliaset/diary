@@ -102,6 +102,14 @@ jobs:
           #!/bin/bash
           set -e
           
+          # Load Node.js from cPanel
+          if [ -f /usr/local/cpanel/3rdparty/lib/path-mount ]; then
+            source /usr/local/cpanel/3rdparty/lib/path-mount
+          fi
+          
+          # Add Node.js to PATH if not already there
+          export PATH="/opt/cpanel/ea-nodejs18/bin:$PATH"
+          
           APP_DIR="/home/eliassqr/apps/dev"
           TMP_DIR="$APP_DIR/tmp"
           
@@ -113,17 +121,34 @@ jobs:
           echo "[2/5] Creating backup..."
           BACKUP_DIR="$TMP_DIR/backup-$(date +%Y%m%d%H%M%S)"
           mkdir -p "$BACKUP_DIR"
-          [ -d "$APP_DIR" ] && cp -r "$APP_DIR"/* "$BACKUP_DIR"/ || true
+          
+          # Copy files to backup, excluding the tmp directory
+          if [ -d "$APP_DIR" ]; then
+            find "$APP_DIR" -mindepth 1 -maxdepth 1 -not -name "tmp" -exec cp -r {} "$BACKUP_DIR"/ \;
+          fi
           
           echo "[3/5] Extracting new version..."
-          mkdir -p "$APP_DIR"
+          # Clean up old files except tmp directory
+          find "$APP_DIR" -mindepth 1 -not -path "$TMP_DIR*" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Extract new version
           tar -xzf "$TMP_DIR/build.tar.gz" -C "$APP_DIR"
           
           echo "[4/5] Installing production dependencies..."
           cd "$APP_DIR"
+          
+          # Verify Node.js and npm are available
+          echo "Node.js version: $(node -v 2>&1 || echo 'Node.js not found')"
+          echo "npm version: $(npm -v 2>&1 || echo 'npm not found')"
+          
+          # Install dependencies
           npm ci --production
           
           echo "[5/5] Starting application..."
+          # Use Passenger if available (cPanel's default)
+          touch "$TMP_DIR/restart.txt"
+          
+          # Also try PM2 if available
           if command -v pm2 >/dev/null 2>&1; then
             if pm2 describe diary-app >/dev/null 2>&1; then
               pm2 restart diary-app --update-env
@@ -131,12 +156,14 @@ jobs:
               pm2 start server.js --name diary-app -i 0
             fi
             pm2 save
-          else
-            # Fallback to cPanel Passenger
-            touch "$APP_DIR/tmp/restart.txt"
           fi
           
+          # Set proper permissions
+          chmod -R 755 "$APP_DIR"
+          chmod -R 755 "$TMP_DIR"
+          
           echo "✅ Deployment completed successfully!"
+          echo "Application should be available at: https://$(hostname)$(grep -m1 '^\s*passenger_base_uri' "$APP_DIR/../.htaccess" 2>/dev/null | cut -d' ' -f2 || echo '')"
           EOL
           
           # Make deploy.sh executable
