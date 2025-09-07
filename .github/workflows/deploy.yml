@@ -102,16 +102,18 @@ jobs:
           #!/bin/bash
           set -e
           
-          # Load Node.js from cPanel
-          if [ -f /usr/local/cpanel/3rdparty/lib/path-mount ]; then
-            source /usr/local/cpanel/3rdparty/lib/path-mount
-          fi
-          
-          # Add Node.js to PATH if not already there
-          export PATH="/opt/cpanel/ea-nodejs18/bin:$PATH"
-          
+          # Set up environment variables
           APP_DIR="/home/eliassqr/apps/dev"
           TMP_DIR="$APP_DIR/tmp"
+          NODE_VENV="/home/eliassqr/nodevenv/apps/dev/22/bin/activate"
+          
+          # Function to run commands in the Node.js virtual environment
+          run_in_venv() {
+              source "$NODE_VENV" && \
+              cd "$APP_DIR" && \
+              $@
+              return $?
+          }
           
           echo "[1/5] Stopping application..."
           if command -v pm2 >/dev/null 2>&1 && pm2 describe diary-app >/dev/null 2>&1; then
@@ -135,27 +137,29 @@ jobs:
           tar -xzf "$TMP_DIR/build.tar.gz" -C "$APP_DIR"
           
           echo "[4/5] Installing production dependencies..."
-          cd "$APP_DIR"
           
           # Verify Node.js and npm are available
-          echo "Node.js version: $(node -v 2>&1 || echo 'Node.js not found')"
-          echo "npm version: $(npm -v 2>&1 || echo 'npm not found')"
+          echo "Node.js version: $(run_in_venv node -v 2>&1 || echo 'Node.js not found')"
+          echo "npm version: $(run_in_venv npm -v 2>&1 || echo 'npm not found')"
           
           # Install dependencies
-          npm ci --production
+          if ! run_in_venv npm ci --production; then
+              echo "⚠️ 'npm ci' failed, trying 'npm install'..."
+              run_in_venv npm install --production
+          fi
           
           echo "[5/5] Starting application..."
-          # Use Passenger if available (cPanel's default)
+          # Touch restart.txt for Passenger
           touch "$TMP_DIR/restart.txt"
           
-          # Also try PM2 if available
-          if command -v pm2 >/dev/null 2>&1; then
-            if pm2 describe diary-app >/dev/null 2>&1; then
-              pm2 restart diary-app --update-env
+          # Try to use PM2 through the virtual environment
+          if run_in_venv command -v pm2 >/dev/null 2>&1; then
+            if run_in_venv pm2 describe diary-app >/dev/null 2>&1; then
+              run_in_venv pm2 restart diary-app --update-env
             else
-              pm2 start server.js --name diary-app -i 0
+              run_in_venv pm2 start server.js --name diary-app -i 0
             fi
-            pm2 save
+            run_in_venv pm2 save
           fi
           
           # Set proper permissions
