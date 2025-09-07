@@ -117,7 +117,14 @@ jobs:
           # Copy built client files
           echo "Copying client files..."
           mkdir -p deploy/client
-          cp -rv client/dist/. deploy/client/ || (echo "Failed to copy client files" && exit 1)
+          
+          # Copy all files from dist to deploy/client
+          if [ -d "client/dist" ]; then
+            cp -a client/dist/. deploy/client/
+          else
+            echo "❌ client/dist directory not found"
+            exit 1
+          fi
           
           # Create .env file with secrets
           echo "NODE_ENV=production" > deploy/.env
