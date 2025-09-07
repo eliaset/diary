@@ -100,7 +100,7 @@ jobs:
 
       # Upload and deploy
       - name: Upload to cPanel
-        uses: appleboy/scp-action@v1.1.1
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ env.CPANEL_HOST }}
           username: ${{ env.CPANEL_USER }}
@@ -111,7 +111,7 @@ jobs:
           overwrite: true
 
       - name: Run deployment script
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ env.CPANEL_HOST }}
           username: ${{ env.CPANEL_USER }}
