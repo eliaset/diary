@@ -32,6 +32,11 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Clean up old build artifacts
+        run: |
+          echo "Cleaning up old build artifacts..."
+          rm -rf client/build client/dist
+          
       - name: Install and build client
         run: |
           echo "Current directory: $(pwd)"
@@ -47,8 +52,6 @@ jobs:
           
           echo "Build output:"
           ls -la dist/
-          
-          cd ..
 
       # Create deployment package
       - name: Verify client build
