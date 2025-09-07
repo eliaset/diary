@@ -29,18 +29,35 @@ jobs:
       - name: Install root dependencies
         run: npm ci --production=false
 
+      - name: Install root dependencies
+        run: npm ci
+
       - name: Install and build client
         run: |
+          cd client
           npm ci
-          cd client && npm ci && npm run build
+          npm run build
           cd ..
 
       # Create deployment package
+      - name: Verify client build
+        run: |
+          if [ ! -d "client/dist" ]; then
+            echo "❌ Client build failed: client/dist directory not found"
+            exit 1
+          fi
+          echo "✅ Client build verified"
+
       - name: Create deployment package
         run: |
-          mkdir -p deploy
+          # Create deploy directory structure
+          mkdir -p deploy/client
+          
+          # Copy server files
           cp -r server.js package.json package-lock.json migrations deploy/
-          cp -r client/dist deploy/client
+          
+          # Copy built client files
+          cp -r client/dist/* deploy/client/
           
           # Create .env file with secrets
           echo "NODE_ENV=production" > deploy/.env
