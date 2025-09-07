@@ -54,18 +54,18 @@ jobs:
       - name: Verify client build
         run: |
           echo "Verifying client build..."
-          if [ ! -d "client/build" ]; then
-            echo "❌ Client build failed: client/build directory not found"
+          if [ ! -d "client/dist" ]; then
+            echo "❌ Client build failed: client/dist directory not found"
             echo "Current directory: $(pwd)"
             echo "Contents of client directory:"
             ls -la client/
-            echo "Contents of client/build (if exists):"
-            ls -la client/build/ 2>/dev/null || echo "client/build does not exist"
+            echo "Contents of client/dist (if exists):"
+            ls -la client/dist/ 2>/dev/null || echo "client/dist does not exist"
             exit 1
           fi
           echo "✅ Client build verified"
           echo "Client build contents:"
-          ls -la client/build/
+          ls -la client/dist/
 
       - name: Create deployment package
         run: |
@@ -76,7 +76,7 @@ jobs:
           cp -r server.js package.json package-lock.json migrations deploy/
           
           # Copy built client files
-          cp -r client/build/* deploy/client/
+          cp -r client/dist/* deploy/client/
           
           # Create .env file with secrets
           echo "NODE_ENV=production" > deploy/.env

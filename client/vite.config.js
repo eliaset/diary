@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'build', // per requirement
+    outDir: 'dist', // Changed from 'build' to 'dist' to match Vite's default
     emptyOutDir: true
   },
   server: {

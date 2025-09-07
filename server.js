@@ -48,8 +48,8 @@ if (isProduction) {
   const morgan = require('morgan');
   app.use(morgan('combined'));
   
-  // Serve static files from the client's build directory
-  app.use(express.static(path.join(__dirname, 'client/build'), {
+  // Serve static files from the client's dist directory
+  app.use(express.static(path.join(__dirname, 'client/dist'), {
     etag: true,
     maxAge: '1y', // Cache static assets for 1 year
   }));
@@ -141,7 +141,7 @@ const clientBuildPath = path.join(__dirname, 'client', 'build');
 // Handle all other routes by serving index.html for SPA routing
 if (isProduction) {
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'client/build/index.html'));
+    res.sendFile(path.join(__dirname, 'client/dist/index.html'));
   });
 }
 
