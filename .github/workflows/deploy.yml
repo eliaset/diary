@@ -192,19 +192,27 @@ jobs:
           echo "Copying client files to deployment package..."
           mkdir -p tmp/client
           
+          # Go back to root directory to ensure correct paths
+          cd /home/runner/work/diary/diary
+          
           # Verify the source directory exists
           if [ -d "client/dist" ]; then
-            echo "Copying files from client/dist/ to tmp/client/"
-            cp -r client/dist/. tmp/client/ || (echo "Failed to copy client files" && exit 1)
+            echo "Copying files from client/dist/ to deploy/tmp/client/"
+            mkdir -p deploy/tmp/client
+            cp -r client/dist/. deploy/tmp/client/ || (echo "Failed to copy client files" && exit 1)
             echo "Client files copied successfully"
-            ls -la tmp/client/
+            echo "Contents of deploy/tmp/client/:"
+            ls -la deploy/tmp/client/
           else
-            echo "❌ Error: client/dist directory not found"
+            echo "❌ Error: client/dist directory not found in $(pwd)"
             echo "Current directory: $(pwd)"
             echo "Contents of client/:"
             ls -la client/
             exit 1
           fi
+          
+          # Go back to deploy directory
+          cd deploy
           
           # Create deploy.sh in the deployment package
           cat > deploy.sh << 'EOL'
