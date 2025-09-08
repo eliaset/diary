@@ -373,23 +373,17 @@ jobs:
                 exit 1
             }
             
-            # Create .htaccess for Passenger
-            echo "Creating .htaccess for Passenger..."
+            # Create app directory if it doesn't exist
             mkdir -p "$APP_DIR/app"
-            cat > "$APP_DIR/app/.htaccess" << 'EOL'
-# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-PassengerAppRoot "$APP_DIR/app"
-PassengerBaseURI "/"
-PassengerNodejs "/home/eliassqr/nodevenv/apps/dev/22/bin/node"
-PassengerAppType node
-PassengerStartupFile server.js
-# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
-
-# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
-<IfModule Litespeed>
-</IfModule>
-# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION END
+            
+            # Check if .htaccess exists, if not create a basic one
+            if [ ! -f "$APP_DIR/app/.htaccess" ]; then
+                echo "Creating default .htaccess file..."
+                cat > "$APP_DIR/app/.htaccess" << 'EOL'
+# Default .htaccess - Please configure as needed
+# Your existing configuration will be preserved
 EOL
+            fi
 
             # Create a start script
             cat > "$APP_DIR/app/start.sh" << 'EOL'
