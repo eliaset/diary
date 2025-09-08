@@ -13,8 +13,29 @@ const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Adjust this based on your needs
+}));
 app.use(compression());
+
+// Serve static files from the dist directory
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath, {
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
+
+// Handle client-side routing - return all requests to the React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 // Rate limiting
 const limiter = rateLimit({

@@ -125,44 +125,44 @@ jobs:
           echo "Current directory: $(pwd)"
           
           # Verify client build exists
-          echo "Verifying client build..."
-          ls -la client/
-          
-          if [ ! -d "client/dist" ]; then
-            echo "❌ Client build not found at client/dist/"
-            echo "Trying to build client..."
-            cd client
-            npm run build
-            cd ..
-            
-            if [ ! -d "client/dist" ]; then
-              echo "❌ Failed to build client"
-              exit 1
-            fi
+          if [ ! -d "dist" ]; then
+            echo "❌ Error: dist directory not found"
+            exit 1
           fi
           
-          echo "✅ Client build verified"
-          echo "Client build contents:"
-          ls -la client/dist/
-          
-          # Create deploy directory structure
-          mkdir -p deploy/client
+          # Create a clean deployment directory
+          rm -rf deploy
+          mkdir -p deploy
           
           # Copy server files
           echo "Copying server files..."
-          cp -v server.js package.json package-lock.json migrations/ deploy/ 2>/dev/null || echo "Some server files not found, continuing..."
+          cp -v server.js package.json package-lock.json .env.example migrations/ deploy/ 2>/dev/null || echo "Some server files not found, continuing..."
           
-          # Copy built client files
-          echo "Copying client files..."
-          mkdir -p deploy/client
-          
-          # Copy all files from dist to deploy/client
-          if [ -d "client/dist" ]; then
-            cp -a client/dist/. deploy/client/
+          # Copy built client files to dist directory
+          echo "Copying client build files..."
+          mkdir -p deploy/dist
+          if [ -d "dist" ]; then
+            cp -a dist/. deploy/dist/
           else
-            echo "❌ client/dist directory not found"
+            echo "❌ dist directory not found"
             exit 1
           fi
+          
+          # Include .htaccess if it exists
+          if [ -f ".htaccess" ]; then
+            echo "Including .htaccess in deployment"
+            cp .htaccess deploy/
+          fi
+          
+          # Create tarball
+          cd deploy
+          tar -czf ../deploy.tar.gz .
+          cd ..
+          
+          echo "Deployment package created:"
+          ls -lh deploy.tar.gz
+          echo "Deployment directory contents:"
+          ls -la deploy/
           
           # Create .env file with secrets
           echo "NODE_ENV=production" > deploy/.env

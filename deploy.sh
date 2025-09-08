@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_DIR="/home/eliassqr/apps/dev"
+PUBLIC_DIR="$APP_DIR/dist"
 TMP_DIR="$APP_DIR/tmp"
 TAR_PATH="$TMP_DIR/build.tar.gz"
 
@@ -12,11 +13,41 @@ if [[ ! -f "$TAR_PATH" ]]; then
   exit 1
 fi
 
-echo "[1/5] Extracting bundle to $APP_DIR ..."
-# Extract overwriting existing files
-# Exclude node_modules to ensure clean install
-rm -rf "$APP_DIR/node_modules"
-tar -xzf "$TAR_PATH" -C "$APP_DIR"
+# Backup important files
+echo "[1/6] Backing up important files..."
+BACKUP_DIR="$TMP_DIR/backup_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+# Backup .htaccess if it exists
+if [ -f "$PUBLIC_DIR/.htaccess" ]; then
+  cp "$PUBLIC_DIR/.htaccess" "$BACKUP_DIR/.htaccess"
+  echo "  - Backed up .htaccess"
+fi
+
+# Backup .env if it exists
+if [ -f "$APP_DIR/.env" ]; then
+  cp "$APP_DIR/.env" "$BACKUP_DIR/.env"
+  echo "  - Backed up .env"
+fi
+
+echo "[2/6] Extracting bundle to $APP_DIR ..."
+# Clean up old files except node_modules and important files
+find "$APP_DIR" -mindepth 1 \( -name 'node_modules' -o -name '.env*' -o -name '.htaccess' \) -prune -o -exec rm -rf {} +
+
+# Extract new files
+tar -xzf "$TAR_PATH" -C "$APP_DIR" --exclude='node_modules' --exclude='.env*' --exclude='.htaccess'
+
+# Restore backed up files
+echo "[3/6] Restoring important files..."
+if [ -f "$BACKUP_DIR/.htaccess" ]; then
+  cp "$BACKUP_DIR/.htaccess" "$PUBLIC_DIR/.htaccess"
+  echo "  - Restored .htaccess"
+fi
+
+if [ -f "$BACKUP_DIR/.env" ]; then
+  cp "$BACKUP_DIR/.env" "$APP_DIR/.env"
+  echo "  - Restored .env"
+fi
 
 # Optionally write .env from current environment if DB_* provided
 if [[ -n "${DB_HOST:-}" ]] && [[ -n "${DB_USER:-}" ]] && [[ -n "${DB_NAME:-}" ]]; then
