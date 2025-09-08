@@ -54,23 +54,27 @@ if (isProduction) {
     next();
   });
   
-  // Serve static files from the client's dist directory
-  const staticPath = path.join(__dirname, 'client/dist');
+  // Serve static files from the project's dist directory
+  const staticPath = path.join(__dirname, 'dist');
   console.log('Serving static files from:', staticPath);
   
-  // First, serve static files
+  // Serve static files
   app.use(express.static(staticPath, {
     etag: true,
     maxAge: '1y',
-    index: false, // Don't serve index.html for directories
-    redirect: false // Disable automatic redirects
+    index: 'index.html',
+    redirect: false
   }));
 
   // Handle client-side routing - return index.html for all non-API routes
   app.get('*', (req, res, next) => {
     console.log('Handling route:', req.path);
     if (req.path.startsWith('/api/')) return next(); // Skip API routes
-    res.sendFile(path.join(staticPath, 'index.html'), (err) => {
+    
+    const indexPath = path.join(staticPath, 'index.html');
+    console.log('Sending index file from:', indexPath);
+    
+    res.sendFile(indexPath, (err) => {
       if (err) {
         console.error('Error sending file:', err);
         res.status(404).send('File not found');

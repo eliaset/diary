@@ -13,10 +13,25 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     base: isProduction ? '/' : '/',
     build: {
-      outDir: 'dist',
+      outDir: '../dist',  // Changed to output directly to project root
       emptyOutDir: true,
       sourcemap: !isProduction,
       minify: isProduction ? 'terser' : false,
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/[name].[hash].js',
+          chunkFileNames: 'assets/[name].[hash].js',
+          assetFileNames: 'assets/[name].[hash][extname]'
+        }
+      }
+    },
+    server: {
+      port: 5173,
+      strictPort: true
+    },
+    preview: {
+      port: 4173,
+      strictPort: true
     },
     server: {
       port: 5173,
