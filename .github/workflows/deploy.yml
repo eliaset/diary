@@ -48,10 +48,18 @@ jobs:
           npm ci
           
           echo "Building client..."
-          npm run build
+          npm run build -- --mode production
+          
+          echo "Moving build output to project root..."
+          mv dist/* ../dist/
+          
+          echo "Build complete. Contents of dist directory:"
+          ls -la ../dist/
+          
+          cd ..
           
           echo "Verifying build output..."
-          if [ ! -d "dist" ]; then
+          if [ ! -d "../dist" ]; then
             echo "❌ Build failed: dist directory not found"
             echo "Current directory: $(pwd)"
             ls -la
