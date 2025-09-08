@@ -1,0 +1,416 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to cPanel
+    runs-on: ubuntu-latest
+    
+    env:
+      CPANEL_HOST: dev.eliasshamil.com
+      CPANEL_USER: eliassqr
+      NODE_VERSION: 18
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # Install dependencies
+      - name: Install root dependencies
+        run: npm ci --production=false
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Clean up old build artifacts
+        run: |
+          echo "Cleaning up old build artifacts..."
+          rm -rf client/build client/dist
+          
+      - name: Install and build client
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Contents of client directory before build:"
+          ls -la client/
+          
+          echo "Installing client dependencies..."
+          cd client
+          npm ci
+          
+          echo "Building client..."
+          npm run build
+          
+          echo "Verifying build output..."
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed: dist directory not found"
+            echo "Current directory: $(pwd)"
+            ls -la
+            exit 1
+          fi
+          
+          echo "Build output in dist/:"
+          ls -la dist/
+          
+          # Go back to root directory
+          cd ..
+
+      # Create deployment package
+      - name: Verify client build
+        run: |
+          echo "Verifying client build..."
+          if [ ! -d "client/dist" ]; then
+            echo "❌ Client build failed: client/dist directory not found"
+            echo "Current directory: $(pwd)"
+            echo "Contents of client directory:"
+            ls -la client/
+            echo "Contents of client/dist (if exists):"
+            ls -la client/dist/ 2>/dev/null || echo "client/dist does not exist"
+            exit 1
+          fi
+          echo "✅ Client build verified"
+          echo "Client build contents:"
+          ls -la client/dist/
+
+      - name: Create deployment package
+        run: |
+          echo "Creating deployment package..."
+          echo "Current directory: $(pwd)"
+          
+          # Verify client build exists
+          echo "Verifying client build..."
+          ls -la client/
+          
+          if [ ! -d "client/dist" ]; then
+            echo "❌ Client build not found at client/dist/"
+            echo "Trying to build client..."
+            cd client
+            npm run build
+            cd ..
+            
+            if [ ! -d "client/dist" ]; then
+              echo "❌ Failed to build client"
+              exit 1
+            fi
+          fi
+          
+          echo "✅ Client build verified"
+          echo "Client build contents:"
+          ls -la client/dist/
+          
+          # Create deploy directory structure
+          mkdir -p deploy/client
+          
+          # Copy server files
+          echo "Copying server files..."
+          cp -v server.js package.json package-lock.json migrations/ deploy/ 2>/dev/null || echo "Some server files not found, continuing..."
+          
+          # Copy built client files
+          echo "Copying client files..."
+          mkdir -p deploy/client
+          
+          # Copy all files from dist to deploy/client
+          if [ -d "client/dist" ]; then
+            cp -a client/dist/. deploy/client/
+          else
+            echo "❌ client/dist directory not found"
+            exit 1
+          fi
+          
+          # Create .env file with secrets
+          echo "NODE_ENV=production" > deploy/.env
+          echo "PORT=3000" >> deploy/.env
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> deploy/.env
+          echo "DB_USER=${{ secrets.DB_USER }}" >> deploy/.env
+          echo "DB_PASS=${{ secrets.DB_PASS }}" >> deploy/.env
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> deploy/.env
+          
+          # Create deploy.sh script
+          cat > deploy/deploy.sh << 'EOL'
+          #!/bin/bash
+          set -e
+          
+          APP_DIR="/home/eliassqr/apps/dev"
+          TMP_DIR="$APP_DIR/tmp"
+          
+          echo "[1/5] Stopping application..."
+          if command -v pm2 >/dev/null 2>&1 && pm2 describe diary-app >/dev/null 2>&1; then
+            pm2 stop diary-app || true
+          fi
+          
+          echo "[2/5] Creating backup..."
+          BACKUP_DIR="$TMP_DIR/backup-$(date +%Y%m%d%H%M%S)"
+          mkdir -p "$BACKUP_DIR"
+          [ -d "$APP_DIR" ] && cp -r "$APP_DIR"/* "$BACKUP_DIR"/ || true
+          
+          echo "[3/5] Extracting new version..."
+          mkdir -p "$APP_DIR"
+          tar -xzf "$TMP_DIR/build.tar.gz" -C "$APP_DIR"
+          
+          echo "[4/5] Installing production dependencies..."
+          cd "$APP_DIR"
+          npm ci --production
+          
+          echo "[5/5] Starting application..."
+          if command -v pm2 >/dev/null 2>&1; then
+            if pm2 describe diary-app >/dev/null 2>&1; then
+              pm2 restart diary-app --update-env
+            else
+              pm2 start server.js --name diary-app -i 0
+            fi
+            pm2 save
+          else
+            # Fallback to cPanel Passenger
+            touch "$APP_DIR/tmp/restart.txt"
+          fi
+          
+          echo "Deployment completed successfully!"
+          EOL
+          
+          # Create tarball
+          cd deploy
+          # Ensure tmp directory exists
+          mkdir -p tmp
+          # Copy files from the current directory
+          cp package.json package-lock.json server.js tmp/
+          
+          # Copy migrations if they exist
+          if [ -d "migrations" ]; then
+            cp -r migrations tmp/
+          fi
+          
+          # Copy built client files
+          echo "Copying client files to deployment package..."
+          mkdir -p tmp/client
+          
+          # Go back to root directory to ensure correct paths
+          cd /home/runner/work/diary/diary
+          
+          # Verify the source directory exists
+          if [ -d "client/dist" ]; then
+            echo "Copying files from client/dist/ to deploy/tmp/client/"
+            mkdir -p deploy/tmp/client
+            cp -r client/dist/. deploy/tmp/client/ || (echo "Failed to copy client files" && exit 1)
+            echo "Client files copied successfully"
+            echo "Contents of deploy/tmp/client/:"
+            ls -la deploy/tmp/client/
+          else
+            echo "❌ Error: client/dist directory not found in $(pwd)"
+            echo "Current directory: $(pwd)"
+            echo "Contents of client/:"
+            ls -la client/
+            exit 1
+          fi
+          
+          # Go back to deploy directory
+          cd deploy
+          
+          # Create deploy.sh in the deployment package
+          cat > deploy.sh << 'EOL'
+          #!/bin/bash
+          set -e
+          
+          # Set up environment variables
+          APP_DIR="/home/eliassqr/apps/dev"
+          TMP_DIR="$APP_DIR/tmp"
+          NODE_VENV="/home/eliassqr/nodevenv/apps/dev/22/bin/activate"
+          
+          # Function to run commands in the Node.js virtual environment
+          run_in_venv() {
+              source "$NODE_VENV" && \
+              cd "$APP_DIR" && \
+              $@
+              return $?
+          }
+          
+          echo "[1/5] Stopping application..."
+          if command -v pm2 >/dev/null 2>&1 && pm2 describe diary-app >/dev/null 2>&1; then
+            pm2 stop diary-app || true
+          fi
+          
+          echo "[2/5] Creating backup..."
+          BACKUP_DIR="$TMP_DIR/backup-$(date +%Y%m%d%H%M%S)"
+          mkdir -p "$BACKUP_DIR"
+          
+          # Copy files to backup, excluding the tmp directory
+          if [ -d "$APP_DIR" ]; then
+            find "$APP_DIR" -mindepth 1 -maxdepth 1 -not -name "tmp" -exec cp -r {} "$BACKUP_DIR"/ \;
+          fi
+          
+          echo "[3/5] Extracting new version..."
+          # Clean up old files except tmp directory
+          find "$APP_DIR" -mindepth 1 -not -path "$TMP_DIR*" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Extract new version
+          tar -xzf "$TMP_DIR/build.tar.gz" -C "$APP_DIR"
+          
+          echo "[4/5] Installing production dependencies..."
+          
+          # Verify Node.js and npm are available
+          echo "Node.js version: $(run_in_venv node -v 2>&1 || echo 'Node.js not found')"
+          echo "npm version: $(run_in_venv npm -v 2>&1 || echo 'npm not found')"
+          
+          # Install dependencies
+          if ! run_in_venv npm ci --production; then
+              echo "⚠️ 'npm ci' failed, trying 'npm install'..."
+              run_in_venv npm install --production
+          fi
+          
+          echo "[5/5] Starting application..."
+          # Touch restart.txt for Passenger
+          touch "$TMP_DIR/restart.txt"
+          
+          # Try to use PM2 through the virtual environment
+          if run_in_venv command -v pm2 >/dev/null 2>&1; then
+            if run_in_venv pm2 describe diary-app >/dev/null 2>&1; then
+              run_in_venv pm2 restart diary-app --update-env
+            else
+              run_in_venv pm2 start server.js --name diary-app -i 0
+            fi
+            run_in_venv pm2 save
+          fi
+          
+          # Set proper permissions
+          chmod -R 755 "$APP_DIR"
+          chmod -R 755 "$TMP_DIR"
+          
+          echo "✅ Deployment completed successfully!"
+          echo "Application should be available at: https://$(hostname)$(grep -m1 '^\s*passenger_base_uri' "$APP_DIR/../.htaccess" 2>/dev/null | cut -d' ' -f2 || echo '')"
+          EOL
+          
+          # Make deploy.sh executable
+          chmod +x deploy.sh
+          
+          # Create tarball
+          tar -czf "../build.tar.gz" .
+          cd ..
+
+      # Upload and deploy
+      - name: Upload to cPanel
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ env.CPANEL_HOST }}
+          username: ${{ env.CPANEL_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          source: "build.tar.gz"
+          target: "/home/${{ env.CPANEL_USER }}/apps/dev/tmp/"
+          overwrite: true
+          strip_components: 0
+
+      - name: Verify Upload
+        run: |
+          echo "Verifying file upload..."
+          ls -la build.tar.gz
+          echo "File size: $(du -h build.tar.gz)"
+
+      - name: Run deployment script
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ env.CPANEL_HOST }}
+          username: ${{ env.CPANEL_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          script: |
+            set -ex
+            echo "=== Deployment Started ==="
+            echo "Current directory: $(pwd)"
+            echo "Environment:"
+            env | sort
+            
+            # Debug: Show directory structure
+            echo "=== Directory Structure ==="
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/
+            
+            # Make sure tmp directory exists
+            mkdir -p /home/${{ env.CPANEL_USER }}/apps/dev/tmp
+            
+            # Extract the tarball
+            echo "=== Extracting build.tar.gz ==="
+            cd /home/${{ env.CPANEL_USER }}/apps/dev/tmp
+            ls -la
+            
+            # Verify tarball exists and is not empty
+            if [ ! -f "build.tar.gz" ]; then
+              echo "❌ Error: build.tar.gz not found in $(pwd)"
+              exit 1
+            fi
+            
+            # Extract with verbose output
+            tar -xzvf build.tar.gz || {
+              echo "❌ Failed to extract build.tar.gz"
+              exit 1
+            }
+            
+            # List extracted files
+            echo "=== Extracted Files ==="
+            find . -type f | sort
+            
+            # Verify deploy.sh exists and is executable
+            if [ ! -f "deploy.sh" ]; then
+              echo "❌ Error: deploy.sh not found in $(pwd)"
+              find . -name "deploy.sh" -type f
+              exit 1
+            fi
+            
+            chmod +x deploy.sh
+            
+            # Run deployment script
+            echo "=== Running deploy.sh ==="
+            if ! ./deploy.sh; then
+              echo "❌ Deployment script failed!"
+              exit 1
+            fi
+            
+            # Verify the deployment
+            echo "=== Verifying Deployment ==="
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/
+            
+            # Check if the application is running
+            if command -v pm2 &> /dev/null; then
+              echo "=== PM2 Status ==="
+              pm2 list
+            fi
+            
+            echo "✅ Deployment completed successfully!"
+            echo "Current directory: $(pwd)"
+            echo "Contents of /home/${{ env.CPANEL_USER }}/apps/dev/tmp:"
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/tmp
+            
+            # Extract the tarball
+            cd "/home/${{ env.CPANEL_USER }}/apps/dev/tmp"
+            echo "Extracting build.tar.gz..."
+            tar -xzf build.tar.gz
+            
+            # List contents after extraction
+            echo "Contents after extraction:"
+            ls -la
+            
+            # Ensure deploy.sh exists and is executable
+            if [ ! -f "deploy.sh" ]; then
+              echo "❌ Error: deploy.sh not found in $(pwd)"
+              echo "Looking for deploy.sh in subdirectories..."
+              find . -name "deploy.sh" -type f
+              exit 1
+            fi
+            
+            chmod +x deploy.sh
+            
+            # Run deployment script
+            echo "🚀 Starting deployment script..."
+            if ! ./deploy.sh; then
+              echo "❌ Deployment script failed!"
+              exit 1
+            fi
+            
+            # Clean up
+            rm -f build.tar.gz
+            
+            echo "✅ Deployment completed successfully!"
