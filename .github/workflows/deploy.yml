@@ -302,15 +302,8 @@ jobs:
           username: ${{ env.CPANEL_USER }}
           key: ${{ secrets.CPANEL_SSH_KEY }}
           source: "build.tar.gz"
-          target: "/home/${{ env.CPANEL_USER }}/apps/dev/tmp/"
+          target: "/home/${{ env.CPANEL_USER }}/"
           overwrite: true
-          strip_components: 0
-
-      - name: Verify Upload
-        run: |
-          echo "Verifying file upload..."
-          ls -la build.tar.gz
-          echo "File size: $(du -h build.tar.gz)"
 
       - name: Run deployment script
         uses: appleboy/ssh-action@v1.0.0
@@ -320,85 +313,72 @@ jobs:
           key: ${{ secrets.CPANEL_SSH_KEY }}
           script: |
             set -ex
-            echo "=== CloudLinux Node.js Selector Compatible Deployment ==="
+            echo "=== CloudLinux Node.js Selector Deployment ==="
             
             # Set paths
-            APP_DIR="/home/${{ env.CPANEL_USER }}/apps/dev"
-            TMP_DIR="$APP_DIR/tmp"
+            USER_HOME="/home/${{ env.CPANEL_USER }}"
+            APP_DIR="$USER_HOME/apps/dev"
+            TMP_DIR="$USER_HOME/temp_deploy_$(date +%s)"
             
-            # Ensure clean state
-            echo "=== Cleaning up previous deployment ==="
-            rm -rf "$TMP_DIR"
+            # Create temp directory
+            echo "=== Setting up deployment environment ==="
             mkdir -p "$TMP_DIR"
             
-            # Move to tmp directory
+            # Move to temp directory
             cd "$TMP_DIR"
             
             # Verify and extract the tarball
             echo "=== Extracting build.tar.gz ==="
-            if [ ! -f "$TMP_DIR/build.tar.gz" ]; then
-              echo "❌ Error: build.tar.gz not found in $TMP_DIR"
+            if [ ! -f "$USER_HOME/build.tar.gz" ]; then
+              echo "❌ Error: build.tar.gz not found in $USER_HOME"
               exit 1
             fi
             
+            # Move tarball to temp directory
+            mv "$USER_HOME/build.tar.gz" .
+            
+            # Extract with verbose output
             tar -xzf build.tar.gz || {
               echo "❌ Failed to extract build.tar.gz"
               exit 1
             }
             
             # For CloudLinux, we need to install dependencies in a specific way
-            echo "=== Installing Node.js dependencies ==="
-            cd "$TMP_DIR"
+            echo "=== Setting up CloudLinux Node.js Selector ==="
             
-            # Remove any existing node_modules to prevent conflicts
-            rm -rf node_modules
-            
-            # Install production dependencies only
-            echo "Installing production dependencies..."
-            npm install --production || {
-              echo "❌ Failed to install production dependencies"
-              exit 1
-            }
-            
-            # Move files to the app directory
-            echo "=== Moving files to app directory ==="
+            # Ensure app directory exists
+            mkdir -p "$APP_DIR"
             cd "$APP_DIR"
             
-            # Backup current app
+            # Clean up any existing app directory
             if [ -d "app.old" ]; then
-              rm -rf "app.old"
+                rm -rf "app.old"
             fi
             if [ -d "app" ]; then
-              mv app app.old
+                mv app app.old
             fi
             
-            # Create new app directory and move files
+            # Move files from temp to app directory
+            echo "Moving files to app directory..."
             mkdir -p app
             mv "$TMP_DIR/"* "$TMP_DIR/".* "$APP_DIR/app/" 2>/dev/null || true
             
-            # Clean up
-            rm -rf "$TMP_DIR"
+            # Change to app directory
+            cd "$APP_DIR/app"
             
-            # Set proper permissions
-            chmod -R 750 "$APP_DIR/app"
-            chown -R ${{ env.CPANEL_USER }}:${{ env.CPANEL_USER }} "$APP_DIR/app"
-            
-            # Restart the application
-            echo "=== Restarting application ==="
-            if command -v pm2 &> /dev/null; then
-              echo "Using PM2 to restart the application..."
-              cd "$APP_DIR/app"
-              pm2 delete diary-app 2>/dev/null || true
-              pm2 start server.js --name diary-app || {
-                echo "❌ Failed to start application with PM2"
+            # Install production dependencies
+            echo "Installing production dependencies..."
+            npm install --production || {
+                echo "❌ Failed to install production dependencies"
                 exit 1
-              }
-              pm2 save
-              pm2 startup
-            else
-              echo "PM2 not found. Using Node.js Selector..."
-              # Create or update the .htaccess file for Node.js Selector
-              echo "### CLOUDLINUX NODEJS SELECTOR ###
+            }
+            
+            # Create required CloudLinux configuration files
+            echo "Creating CloudLinux configuration..."
+            
+            # Create .htaccess for routing
+            cat > "$APP_DIR/app/.htaccess" << 'EOL'
+### CLOUDLINUX NODEJS SELECTOR ###
 # DO NOT EDIT THIS FILE OR DELETE
 # This file is used by CloudLinux Node.js selector
 # To modify the application, edit the application's files
@@ -409,16 +389,16 @@ jobs:
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
-</IfModule>" > "$APP_DIR/app/.htaccess"
-              
-              # Create application.json for Node.js Selector
-              echo "Creating application.json for Node.js Selector..."
-              cat > "$APP_DIR/app/application.json" << EOF
+</IfModule>
+EOL
+
+            # Create application.json for Node.js Selector
+            cat > "$APP_DIR/app/application.json" << EOF
 {
   "app_url": "/",
-  "app_root": "/home/${{ env.CPANEL_USER }}/apps/dev/app",
+  "app_root": "$APP_DIR/app",
   "app_startup": "server.js",
-  "app_logs": "/home/${{ env.CPANEL_USER }}/logs/node-app.log",
+  "app_logs": "$USER_HOME/logs/node-app.log",
   "app_env_vars": [
     {
       "name": "NODE_ENV",
@@ -427,37 +407,57 @@ jobs:
     {
       "name": "PORT",
       "value": "3000"
+    },
+    {
+      "name": "DB_HOST",
+      "value": "$(grep DB_HOST .env | cut -d= -f2-)"
+    },
+    {
+      "name": "DB_USER",
+      "value": "$(grep DB_USER .env | cut -d= -f2-)"
+    },
+    {
+      "name": "DB_PASS",
+      "value": "$(grep DB_PASS .env | cut -d= -f2-)"
+    },
+    {
+      "name": "DB_NAME",
+      "value": "$(grep DB_NAME .env | cut -d= -f2-)"
     }
   ]
 }
 EOF
 
-              # Create a simple start script
-              echo "Creating start script..."
-              cat > "$APP_DIR/app/start.sh" << 'EOF'
+            # Create a start script
+            cat > "$APP_DIR/app/start.sh" << 'EOL'
 #!/bin/bash
-cd "$(dirname "$0")"
-npm start
-EOF
-              chmod +x "$APP_DIR/app/start.sh"
-              
-              # Set proper permissions
-              chmod 750 "$APP_DIR/app"
-              chown -R ${{ env.CPANEL_USER }}:${{ env.CPANEL_USER }} "$APP_DIR/app"
-              
-              echo "=== Deployment completed successfully! ==="
-              echo "Application should now be accessible at: https://${{ env.CPANEL_HOST }}/"
-              echo ""
-              echo "Next steps in cPanel:"
-              echo "1. Go to 'Setup Node.js App'"
-              echo "2. Select your application"
-              echo "3. Click 'Run NPM Install'"
-              echo "4. Click 'Start Application'"
-              echo ""
-              echo "If you encounter any issues, check the application logs in cPanel."
-            fi
+cd "$(dirname "$0")" || exit 1
+node server.js
+EOL
+            chmod +x "$APP_DIR/app/start.sh"
+            
+            # Set proper permissions
+            echo "Setting file permissions..."
+            chmod -R 750 "$APP_DIR/app"
+            chown -R ${{ env.CPANEL_USER }}:${{ env.CPANEL_USER }} "$APP_DIR/app"
+            
+            # Clean up
+            rm -rf "$TMP_DIR"
+            
+            echo "=== Deployment completed successfully! ==="
+            echo ""
+            echo "Next steps in cPanel:"
+            echo "1. Go to 'Setup Node.js App'"
+            echo "2. Create a new application with these settings:"
+            echo "   - Application Root: $APP_DIR/app"
+            echo "   - Application URL: /"
+            echo "   - Application Startup File: server.js"
+            echo "3. Click 'Run NPM Install'"
+            echo "4. Click 'Start Application'"
+            echo ""
+            echo "If you encounter any issues, check the application logs in cPanel."
             
             # Clean up
             rm -f build.tar.gz
             
-            echo "✅ Deployment package prepared successfully!"
+            echo "✅ Deployment completed successfully!"
