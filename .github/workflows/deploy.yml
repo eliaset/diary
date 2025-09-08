@@ -190,25 +190,17 @@ jobs:
           
           # Copy built client files
           echo "Copying client files to deployment package..."
+          mkdir -p tmp/client
           
-          # Go to root directory
+          # Go back to root directory to ensure correct paths
           cd /home/runner/work/diary/diary
           
           # Verify the source directory exists
           if [ -d "client/dist" ]; then
-            echo "Copying files from client/dist/ to deploy/tmp/"
-            mkdir -p deploy/tmp
-            
-            # Copy client files to the root of the deployment
-            cp -r client/dist/. deploy/tmp/ || (echo "Failed to copy client files" && exit 1)
-            
-            # Also copy the files to client/ for backward compatibility
+            echo "Copying files from client/dist/ to deploy/tmp/client/"
             mkdir -p deploy/tmp/client
-            cp -r client/dist/. deploy/tmp/client/ || (echo "Failed to copy client files to client/ directory" && exit 1)
-            
+            cp -r client/dist/. deploy/tmp/client/ || (echo "Failed to copy client files" && exit 1)
             echo "Client files copied successfully"
-            echo "Contents of deploy/tmp/:"
-            ls -la deploy/tmp/
             echo "Contents of deploy/tmp/client/:"
             ls -la deploy/tmp/client/
           else
