@@ -48,18 +48,30 @@ jobs:
           npm ci
           
           echo "Building client..."
+          # Build with production mode
           npm run build -- --mode production
           
-          echo "Moving build output to project root..."
-          mv dist/* ../dist/
+          echo "Build complete. Contents of client directory after build:"
+          ls -la
           
-          echo "Build complete. Contents of dist directory:"
-          ls -la ../dist/
+          # Check where the build output was created
+          if [ -d "dist" ]; then
+            echo "Build output found in client/dist"
+            mv dist/* ../../dist/
+          elif [ -d "../dist" ]; then
+            echo "Build output found in project root dist"
+            # Nothing to move, it's already in the right place
+          else
+            echo "❌ Error: Could not find build output directory"
+            echo "Current directory: $(pwd)"
+            ls -la ..
+            exit 1
+          fi
           
           cd ..
           
           echo "Verifying build output..."
-          if [ ! -d "../dist" ]; then
+          if [ ! -d "dist" ]; then
             echo "❌ Build failed: dist directory not found"
             echo "Current directory: $(pwd)"
             ls -la
@@ -309,7 +321,7 @@ jobs:
           host: ${{ env.CPANEL_HOST }}
           username: ${{ env.CPANEL_USER }}
           key: ${{ secrets.CPANEL_SSH_KEY }}
-          source: "deploy/build.tar.gz"
+          source: "build.tar.gz"
           target: "/home/${{ env.CPANEL_USER }}/apps/dev/tmp/"
           overwrite: true
           strip_components: 0
@@ -317,8 +329,8 @@ jobs:
       - name: Verify Upload
         run: |
           echo "Verifying file upload..."
-          ls -la deploy/build.tar.gz
-          echo "File size: $(du -h deploy/build.tar.gz)"
+          ls -la build.tar.gz
+          echo "File size: $(du -h build.tar.gz)"
 
       - name: Run deployment script
         uses: appleboy/ssh-action@v1.0.0
@@ -347,13 +359,13 @@ jobs:
             
             # Verify tarball exists and is not empty
             if [ ! -f "build.tar.gz" ]; then
-              echo " Error: build.tar.gz not found in $(pwd)"
+              echo "❌ Error: build.tar.gz not found in $(pwd)"
               exit 1
             fi
             
             # Extract with verbose output
             tar -xzvf build.tar.gz || {
-              echo " Failed to extract build.tar.gz"
+              echo "❌ Failed to extract build.tar.gz"
               exit 1
             }
             
@@ -363,32 +375,47 @@ jobs:
             
             # Verify deploy.sh exists and is executable
             if [ ! -f "deploy.sh" ]; then
-              echo " Error: deploy.sh not found in $(pwd)"
+              echo "❌ Error: deploy.sh not found in $(pwd)"
               find . -name "deploy.sh" -type f
               exit 1
             fi
             
             chmod +x deploy.sh
             
-            # Clean up any existing files
-            echo "=== Cleaning up old files ==="
-            cd "/home/${{ env.CPANEL_USER }}/apps/dev"
-            find . -mindepth 1 ! -name 'tmp' -exec rm -rf {} + 2>/dev/null || true
+            # Run deployment script
+            echo "=== Running deploy.sh ==="
+            if ! ./deploy.sh; then
+              echo "❌ Deployment script failed!"
+              exit 1
+            fi
+            
+            # Verify the deployment
+            echo "=== Verifying Deployment ==="
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/
+            
+            # Check if the application is running
+            if command -v pm2 &> /dev/null; then
+              echo "=== PM2 Status ==="
+              pm2 list
+            fi
+            
+            echo "✅ Deployment completed successfully!"
+            echo "Current directory: $(pwd)"
+            echo "Contents of /home/${{ env.CPANEL_USER }}/apps/dev/tmp:"
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/tmp
             
             # Extract the tarball
-            echo "=== Extracting build.tar.gz ==="
             cd "/home/${{ env.CPANEL_USER }}/apps/dev/tmp"
-            tar -xzf build.tar.gz -C ..
+            echo "Extracting build.tar.gz..."
+            tar -xzf build.tar.gz
             
-            # Verify extraction
-            echo "=== Verifying extracted files ==="
-            ls -la "/home/${{ env.CPANEL_USER }}/apps/dev/"
+            # List contents after extraction
             echo "Contents after extraction:"
             ls -la
             
             # Ensure deploy.sh exists and is executable
             if [ ! -f "deploy.sh" ]; then
-              echo " Error: deploy.sh not found in $(pwd)"
+              echo "❌ Error: deploy.sh not found in $(pwd)"
               echo "Looking for deploy.sh in subdirectories..."
               find . -name "deploy.sh" -type f
               exit 1
