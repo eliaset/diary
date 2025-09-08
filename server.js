@@ -50,14 +50,26 @@ if (isProduction) {
   
   // Serve static files from the client's dist directory
   const staticPath = path.join(__dirname, 'client/dist');
+  console.log('Serving static files from:', staticPath);
+  
+  // First, serve static files
   app.use(express.static(staticPath, {
     etag: true,
     maxAge: '1y',
+    index: false, // Don't serve index.html for directories
+    redirect: false // Disable automatic redirects
   }));
 
   // Handle client-side routing - return index.html for all non-API routes
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(staticPath, 'index.html'));
+  app.get('*', (req, res, next) => {
+    console.log('Handling route:', req.path);
+    if (req.path.startsWith('/api/')) return next(); // Skip API routes
+    res.sendFile(path.join(staticPath, 'index.html'), (err) => {
+      if (err) {
+        console.error('Error sending file:', err);
+        res.status(404).send('File not found');
+      }
+    });
   });
 } else {
   // In development, just serve the client from Vite dev server (handled by CORS)
