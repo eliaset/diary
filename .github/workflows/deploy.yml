@@ -302,8 +302,15 @@ jobs:
           username: ${{ env.CPANEL_USER }}
           key: ${{ secrets.CPANEL_SSH_KEY }}
           source: "build.tar.gz"
-          target: "/home/${{ env.CPANEL_USER }}/"
+          target: "/home/${{ env.CPANEL_USER }}/apps/dev/tmp/"
           overwrite: true
+          strip_components: 0
+
+      - name: Verify Upload
+        run: |
+          echo "Verifying file upload..."
+          ls -la build.tar.gz
+          echo "File size: $(du -h build.tar.gz)"
 
       - name: Run deployment script
         uses: appleboy/ssh-action@v1.0.0
@@ -313,116 +320,95 @@ jobs:
           key: ${{ secrets.CPANEL_SSH_KEY }}
           script: |
             set -ex
-            echo "=== CloudLinux Node.js Selector Deployment ==="
+            echo "=== Deployment Started ==="
+            echo "Current directory: $(pwd)"
+            echo "Environment:"
+            env | sort
             
-            # Set paths
-            USER_HOME="/home/${{ env.CPANEL_USER }}"
-            APP_DIR="$USER_HOME/apps/dev"
-            TMP_DIR="$USER_HOME/temp_deploy_$(date +%s)"
+            # Debug: Show directory structure
+            echo "=== Directory Structure ==="
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/
             
-            # Create temp directory
-            echo "=== Setting up deployment environment ==="
-            mkdir -p "$TMP_DIR"
+            # Make sure tmp directory exists
+            mkdir -p /home/${{ env.CPANEL_USER }}/apps/dev/tmp
             
-            # Move to temp directory
-            cd "$TMP_DIR"
-            
-            # Verify and extract the tarball
+            # Extract the tarball
             echo "=== Extracting build.tar.gz ==="
-            if [ ! -f "$USER_HOME/build.tar.gz" ]; then
-              echo "❌ Error: build.tar.gz not found in $USER_HOME"
+            cd /home/${{ env.CPANEL_USER }}/apps/dev/tmp
+            ls -la
+            
+            # Verify tarball exists and is not empty
+            if [ ! -f "build.tar.gz" ]; then
+              echo "❌ Error: build.tar.gz not found in $(pwd)"
               exit 1
             fi
             
-            # Move tarball to temp directory
-            mv "$USER_HOME/build.tar.gz" .
-            
             # Extract with verbose output
-            tar -xzf build.tar.gz || {
+            tar -xzvf build.tar.gz || {
               echo "❌ Failed to extract build.tar.gz"
               exit 1
             }
             
-            # For CloudLinux with Passenger
-            echo "=== Setting up CloudLinux Passenger ==="
+            # List extracted files
+            echo "=== Extracted Files ==="
+            find . -type f | sort
             
-            # Ensure app directory exists
-            mkdir -p "$APP_DIR"
-            cd "$APP_DIR"
-            
-            # Clean up any existing app directory
-            if [ -d "app.old" ]; then
-                rm -rf "app.old"
-            fi
-            if [ -d "app" ]; then
-                mv app app.old
+            # Verify deploy.sh exists and is executable
+            if [ ! -f "deploy.sh" ]; then
+              echo "❌ Error: deploy.sh not found in $(pwd)"
+              find . -name "deploy.sh" -type f
+              exit 1
             fi
             
-            # Move files from temp to app directory
-            echo "Moving files to app directory..."
-            mkdir -p app
-            mv "$TMP_DIR/"* "$TMP_DIR/".* "$APP_DIR/app/" 2>/dev/null || true
+            chmod +x deploy.sh
             
-            # Change to app directory
-            cd "$APP_DIR/app"
-            
-            # Install production dependencies
-            echo "Installing production dependencies..."
-            npm install --production || {
-                echo "❌ Failed to install production dependencies"
-                exit 1
-            }
-            
-            # Create app directory if it doesn't exist
-            mkdir -p "$APP_DIR/app"
-
-            # Create a start script
-            cat > "$APP_DIR/app/start.sh" << 'EOL'
-#!/bin/bash
-cd "$(dirname "$0")" || exit 1
-node server.js
-EOL
-            chmod +x "$APP_DIR/app/start.sh"
-            
-            # Set proper permissions
-            echo "Setting file permissions..."
-            chmod -R 750 "$APP_DIR/app"
-            chown -R ${{ env.CPANEL_USER }}:${{ env.CPANEL_USER }} "$APP_DIR/app"
-            
-            # Create a .env file with environment variables from GitHub secrets
-            echo "Creating .env file..."
-            if [ -z "${{ secrets.DB_HOST }}" ] || [ -z "${{ secrets.DB_USER }}" ] || [ -z "${{ secrets.DB_PASS }}" ] || [ -z "${{ secrets.DB_NAME }}" ]; then
-                echo "❌ Error: One or more required environment variables are not set"
-                echo "Please check that DB_HOST, DB_USER, DB_PASS, and DB_NAME are set in GitHub Secrets"
-                exit 1
+            # Run deployment script
+            echo "=== Running deploy.sh ==="
+            if ! ./deploy.sh; then
+              echo "❌ Deployment script failed!"
+              exit 1
             fi
             
-            cat > "$APP_DIR/app/.env" << EOF
-NODE_ENV=production
-PORT=3000
-DB_HOST=${{ secrets.DB_HOST }}
-DB_USER=${{ secrets.DB_USER }}
-DB_PASS=${{ secrets.DB_PASS }}
-DB_NAME=${{ secrets.DB_NAME }}
-EOF
+            # Verify the deployment
+            echo "=== Verifying Deployment ==="
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/
             
-            echo "Environment variables set successfully"
+            # Check if the application is running
+            if command -v pm2 &> /dev/null; then
+              echo "=== PM2 Status ==="
+              pm2 list
+            fi
             
-            # Clean up
-            rm -rf "$TMP_DIR"
+            echo "✅ Deployment completed successfully!"
+            echo "Current directory: $(pwd)"
+            echo "Contents of /home/${{ env.CPANEL_USER }}/apps/dev/tmp:"
+            ls -la /home/${{ env.CPANEL_USER }}/apps/dev/tmp
             
-            echo "=== Deployment completed successfully! ==="
-            echo ""
-            echo "Next steps in cPanel:"
-            echo "1. Go to 'Setup Node.js App'"
-            echo "2. Create a new application with these settings:"
-            echo "   - Application Root: $APP_DIR/app"
-            echo "   - Application URL: /"
-            echo "   - Application Startup File: server.js"
-            echo "3. Click 'Run NPM Install'"
-            echo "4. Click 'Start Application'"
-            echo ""
-            echo "If you encounter any issues, check the application logs in cPanel."
+            # Extract the tarball
+            cd "/home/${{ env.CPANEL_USER }}/apps/dev/tmp"
+            echo "Extracting build.tar.gz..."
+            tar -xzf build.tar.gz
+            
+            # List contents after extraction
+            echo "Contents after extraction:"
+            ls -la
+            
+            # Ensure deploy.sh exists and is executable
+            if [ ! -f "deploy.sh" ]; then
+              echo "❌ Error: deploy.sh not found in $(pwd)"
+              echo "Looking for deploy.sh in subdirectories..."
+              find . -name "deploy.sh" -type f
+              exit 1
+            fi
+            
+            chmod +x deploy.sh
+            
+            # Run deployment script
+            echo "🚀 Starting deployment script..."
+            if ! ./deploy.sh; then
+              echo "❌ Deployment script failed!"
+              exit 1
+            fi
             
             # Clean up
             rm -f build.tar.gz
