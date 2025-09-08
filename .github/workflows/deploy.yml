@@ -48,37 +48,35 @@ jobs:
           npm ci
           
           echo "Building client..."
-          # Build with production mode
-          npm run build -- --mode production
+          # Ensure the dist directory exists
+          mkdir -p ../../dist
           
-          echo "Build complete. Contents of client directory after build:"
-          ls -la
+          # Build with production mode and explicit output directory
+          npm run build -- --mode production --outDir ../../dist
           
-          # Check where the build output was created
-          if [ -d "dist" ]; then
-            echo "Build output found in client/dist"
-            mv dist/* ../../dist/
-          elif [ -d "../dist" ]; then
-            echo "Build output found in project root dist"
-            # Nothing to move, it's already in the right place
-          else
-            echo "❌ Error: Could not find build output directory"
+          echo "Build complete. Contents of project root/dist:"
+          ls -la ../../dist/
+          
+          # Verify build output
+          if [ ! -d "../../dist" ] || [ -z "$(ls -A ../../dist)" ]; then
+            echo "❌ Error: Build output is empty or missing"
             echo "Current directory: $(pwd)"
-            ls -la ..
+            echo "Contents of ../../:"
+            ls -la ../../
             exit 1
           fi
           
           cd ..
           
-          echo "Verifying build output..."
+          echo "Verifying build output in project root..."
           if [ ! -d "dist" ]; then
-            echo "❌ Build failed: dist directory not found"
+            echo "❌ Build failed: dist directory not found in project root"
             echo "Current directory: $(pwd)"
             ls -la
             exit 1
           fi
           
-          echo "Build output in dist/:"
+          echo "✅ Build output verified in project root/dist:"
           ls -la dist/
           
           # Go back to root directory
