@@ -375,15 +375,6 @@ jobs:
             
             # Create app directory if it doesn't exist
             mkdir -p "$APP_DIR/app"
-            
-            # Check if .htaccess exists, if not create a basic one
-            if [ ! -f "$APP_DIR/app/.htaccess" ]; then
-                echo "Creating default .htaccess file..."
-                cat > "$APP_DIR/app/.htaccess" << 'EOL'
-# Default .htaccess - Please configure as needed
-# Your existing configuration will be preserved
-EOL
-            fi
 
             # Create a start script
             cat > "$APP_DIR/app/start.sh" << 'EOL'
