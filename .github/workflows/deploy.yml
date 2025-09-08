@@ -391,6 +391,12 @@ EOL
             
             # Create a .env file with environment variables from GitHub secrets
             echo "Creating .env file..."
+            if [ -z "${{ secrets.DB_HOST }}" ] || [ -z "${{ secrets.DB_USER }}" ] || [ -z "${{ secrets.DB_PASS }}" ] || [ -z "${{ secrets.DB_NAME }}" ]; then
+                echo "❌ Error: One or more required environment variables are not set"
+                echo "Please check that DB_HOST, DB_USER, DB_PASS, and DB_NAME are set in GitHub Secrets"
+                exit 1
+            fi
+            
             cat > "$APP_DIR/app/.env" << EOF
 NODE_ENV=production
 PORT=3000
@@ -399,6 +405,8 @@ DB_USER=${{ secrets.DB_USER }}
 DB_PASS=${{ secrets.DB_PASS }}
 DB_NAME=${{ secrets.DB_NAME }}
 EOF
+            
+            echo "Environment variables set successfully"
             
             # Clean up
             rm -rf "$TMP_DIR"
