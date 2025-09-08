@@ -67,17 +67,30 @@ jobs:
           # Move build output to project root/dist
           echo "Moving build output to project root..."
           cd ..  # Move to project root
+          
+          # Make sure we're in the right directory
+          echo "Current directory after cd ..: $(pwd)"
+          echo "Contents of current directory:"
+          ls -la
+          
+          # Create dist directory if it doesn't exist
           mkdir -p dist
-          mv client/dist/* dist/
           
-          echo "Verifying project root/dist:"
-          ls -la dist/
-          
-          cd ..
-          
-          echo "Verifying build output in project root..."
-          if [ ! -d "dist" ]; then
-            echo "❌ Build failed: dist directory not found in project root"
+          # Move files from client/dist to dist
+          if [ -d "client/dist" ]; then
+            echo "Moving files from client/dist to dist/"
+            mv client/dist/* dist/
+            
+            echo "Verifying project root/dist:"
+            ls -la dist/
+            
+            # Verify files were moved
+            if [ -z "$(ls -A dist/)" ]; then
+              echo "❌ Error: No files were moved to dist/"
+              exit 1
+            fi
+          else
+            echo "❌ Error: client/dist directory not found"
             echo "Current directory: $(pwd)"
             ls -la
             exit 1
