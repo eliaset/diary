@@ -375,6 +375,7 @@ jobs:
             
             # Create .htaccess for Passenger
             echo "Creating .htaccess for Passenger..."
+            mkdir -p "$APP_DIR/app"
             cat > "$APP_DIR/app/.htaccess" << 'EOL'
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
 PassengerAppRoot "$APP_DIR/app"
