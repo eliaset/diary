@@ -50,7 +50,6 @@ jobs:
           echo "Building client..."
           
           # Build with production mode
-          # Vite is configured to output to ../dist in vite.config.js
           npm run build -- --mode production
           
           echo "Build complete. Contents of client/dist:"
@@ -67,11 +66,12 @@ jobs:
           
           # Move build output to project root/dist
           echo "Moving build output to project root..."
-          mkdir -p ../../dist
-          mv dist/* ../../dist/
+          cd ..  # Move to project root
+          mkdir -p dist
+          mv client/dist/* dist/
           
           echo "Verifying project root/dist:"
-          ls -la ../../dist/
+          ls -la dist/
           
           cd ..
           

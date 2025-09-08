@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     base: isProduction ? '/' : '/',
     build: {
-      outDir: '../dist',  // Changed to output directly to project root
+      outDir: 'dist',  // Output to client/dist
       emptyOutDir: true,
       sourcemap: !isProduction,
       minify: isProduction ? 'terser' : false,
