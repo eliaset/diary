@@ -46,7 +46,13 @@ if (isProduction) {
 // Logging middleware for production
 if (isProduction) {
   const morgan = require('morgan');
-  app.use(morgan('combined'));
+  app.use(morgan('dev')); // More detailed logging
+  
+  // Log all requests
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
   
   // Serve static files from the client's dist directory
   const staticPath = path.join(__dirname, 'client/dist');
